@@ -12,7 +12,8 @@ import os
 import matplotlib.pyplot as plt
 import matplotlib.patches as ptc
 from matplotlib.colors import LogNorm
-
+# plotting using plotly, for zoomable and user interaction
+import plotly.express as px
 # 3rd party
 from tqdm import tqdm
 from numpy import log10, where
@@ -43,6 +44,7 @@ def visualize(
     folder=None,  # folder path to save frames
     show=False,  # default False to allow animate to be true
     style=None,
+    plotly=False
 ):
     """visualize a projection of the grid and the optical energy inside the grid
 
@@ -111,13 +113,15 @@ def visualize(
         raise ValueError(
             "at least one projection plane (x, y or z) should be supplied to visualize the grid!"
         )
-
+    #fig = px.imshow([0][0])   
     # just to create the right legend entries:
     plt.plot([], lw=7, color=objcolor, label="Objects")
     plt.plot([], lw=7, color=pmlcolor, label="PML")
     plt.plot([], lw=3, color=pbcolor, label="Periodic Boundaries")
     plt.plot([], lw=3, color=srccolor, label="Sources")
     plt.plot([], lw=3, color=detcolor, label="Detectors")
+    
+
 
     # Grid energy
     grid_energy = bd.sum(grid.E**2 + grid.H**2, -1)
@@ -167,6 +171,7 @@ def visualize(
             elif z is not None:
                 _x = source.x
                 _y = source.y
+
             plt.plot(_y - 0.5, _x - 0.5, lw=3, marker="o", color=srccolor)
             grid_energy[_x, _y] = 0  # do not visualize energy at location of source
         elif isinstance(source, PlaneSource):
@@ -211,6 +216,7 @@ def visualize(
                 edgecolor="none",
                 facecolor=srccolor,
             )
+            
             plt.gca().add_patch(patch)
 
     # Detector
@@ -227,6 +233,7 @@ def visualize(
 
         if detector.__class__.__name__ == "BlockDetector":
             # BlockDetector
+            
             plt.plot(
                 [_y[0], _y[1], _y[1], _y[0], _y[0]],
                 [_x[0], _x[0], _x[1], _x[1], _x[0]],
@@ -235,6 +242,7 @@ def visualize(
             )
         else:
             # LineDetector
+            
             plt.plot(_y, _x, lw=3, color=detcolor)
 
     # Boundaries
@@ -313,11 +321,24 @@ def visualize(
     cmap_norm = None
     if norm == "log":
         cmap_norm = LogNorm(vmin=1e-4, vmax=grid_energy.max() + 1e-4)
+    fig = px.imshow(
+        abs(bd.numpy(grid_energy)), color_continuous_scale=cmap, zmin=1e-4, zmax=grid_energy.max() + 1e-4, template="plotly_dark"
+    )
+    # finalize the plot
+    fig.update_layout(
+        title="Energy in the grid",
+        xaxis_title=xlabel,
+        yaxis_title=ylabel,
+        legend_title="Legend"
+    )
+    fig['layout']['uirevision'] = 'some-constant'
+
     plt.imshow(
-        abs(bd.numpy(grid_energy)), cmap=cmap, interpolation="sinc", norm=cmap_norm
+    abs(bd.numpy(grid_energy)), cmap=cmap, interpolation="sinc", norm=cmap_norm
     )
 
-    # finalize the plot
+    
+
     plt.ylabel(xlabel)
     plt.xlabel(ylabel)
     plt.ylim(Nx, -1)
@@ -331,13 +352,18 @@ def visualize(
 
     # show if not animating
     if show:
-        plt.show()
-
-    return plt.gcf()  # return figure for gradio support
+        if plotly:
+            fig.show()
+        else:
+            plt.show()
+    if plotly:
+        return fig
+    else:
+        return plt.gcf()  # return figure for gradio support
 
 
 def dB_map_2D(
-    block_det=None, choose_axis=2, interpolation="spline16", show=True, style=None
+    block_det=None, choose_axis=2, interpolation="spline16", show=True, style=None, plotly=False
 ):
     """
     Displays detector readings from an 'fdtd.BlockDetector' in a decibel map spanning a 2D slice region inside the BlockDetector.
@@ -388,13 +414,24 @@ def dB_map_2D(
     cbar = plt.colorbar()
     cbar.ax.set_ylabel("dB scale", rotation=270)
 
+    # set up plotly figure
+    fig = px.imshow(a, color_continuous_scale="inferno", template="plotly_dark")
+    fig.update_layout(
+        title="dB map of Electrical waves in detector region",
+        xaxis_title="x",
+        yaxis_title="y",
+        legend_title="Legend"
+    )
+    fig['layout']['uirevision'] = 'some-constant'
+
     if show:
         plt.show()
-
+    if plotly:
+        return fig
     return plt.gcf()
 
 
-def plot_detection(detector_dict=None, specific_plot=None, show=True, style=None):
+def plot_detection(detector_dict=None, specific_plot=None, show=True, style=None, plotly=False):
     """
     1. Plots intensity readings on array of 'fdtd.LineDetector' as a function of timestep.
     2. Plots time of arrival of pulse at different LineDetector in array.
